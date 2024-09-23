@@ -3,11 +3,10 @@ import {
   BlockPublicAccess,
   Bucket,
   BucketEncryption,
-  HttpMethods,
+  HttpMethods, IBucket,
   ObjectOwnership,
 } from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
-import { Auth } from "./constructs/auth";
 import { Api } from "./constructs/api";
 import { Database } from "./constructs/database";
 import { Frontend } from "./constructs/frontend";
@@ -24,9 +23,15 @@ import { CronScheduleProps, createCronSchedule } from "./utils/cron-schedule";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as path from "path";
 import { BedrockKnowledgeBaseCodebuild } from "./constructs/bedrock-knowledge-base-codebuild";
+import {ITable} from "aws-cdk-lib/aws-dynamodb";
+import {ISecret} from "aws-cdk-lib/aws-secretsmanager";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as codebuild from "aws-cdk-lib/aws-codebuild";
+import * as s3 from "aws-cdk-lib/aws-s3";
 
 export interface BedrockChatStackProps extends StackProps {
   readonly bedrockRegion: string;
+  readonly cognitoRegion: string;
   readonly webAclId: string;
   readonly identityProviders: TIdentityProvider[];
   readonly userPoolDomainPrefix: string;
@@ -42,6 +47,13 @@ export interface BedrockChatStackProps extends StackProps {
   readonly selfSignUpEnabled: boolean;
   readonly enableIpV6: boolean;
   readonly natgatewayCount: number;
+  readonly certificateArn: string;
+  readonly hostedZoneId: string;
+  readonly domain: string;
+  readonly subDomain: string;
+  readonly userPoolId: string;
+  readonly userPoolClientId: string;
+
 }
 
 export class BedrockChatStack extends cdk.Stack {
@@ -148,16 +160,15 @@ export class BedrockChatStack extends cdk.Stack {
       enableMistral: props.enableMistral,
       enableKB: props.enableKB,
       enableIpV6: props.enableIpV6,
+      certificateArn: props.certificateArn,
+      hostedZoneId: props.hostedZoneId,
+      domain: props.domain,
+      subDomain: props.subDomain,
+      userPoolId: props.userPoolId,
+      userPoolClientId: props.userPoolClientId,
     });
 
-    const auth = new Auth(this, "Auth", {
-      origin: frontend.getOrigin(),
-      userPoolDomainPrefixKey: props.userPoolDomainPrefix,
-      idp,
-      allowedSignUpEmailDomains: props.allowedSignUpEmailDomains,
-      autoJoinUserGroups: props.autoJoinUserGroups,
-      selfSignUpEnabled: props.selfSignUpEnabled,
-    });
+
     const largeMessageBucket = new Bucket(this, "LargeMessageBucket", {
       encryption: BucketEncryption.S3_MANAGED,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
@@ -180,42 +191,52 @@ export class BedrockChatStack extends cdk.Stack {
     });
 
     const backendApi = new Api(this, "BackendApi", {
-      vpc,
+      vpc: vpc,
       database: database.table,
-      auth,
-      bedrockRegion: props.bedrockRegion,
-      tableAccessRole: database.tableAccessRole,
       dbSecrets: vectorStore.secret,
-      documentBucket,
+      bedrockRegion: props.bedrockRegion,
+      cognitoRegion: props.cognitoRegion,
+      userPoolId: props.userPoolId,
+      userPoolClientId: props.userPoolClientId,
+      tableAccessRole: database.tableAccessRole,
+      documentBucket: documentBucket,
+      largeMessageBucket: largeMessageBucket,
       apiPublishProject: apiPublishCodebuild.project,
       bedrockKnowledgeBaseProject: bedrockKnowledgeBaseCodebuild.project,
-      usageAnalysis,
-      largeMessageBucket,
+      usageAnalysis: usageAnalysis,
       enableMistral: props.enableMistral,
     });
+
+
     documentBucket.grantReadWrite(backendApi.handler);
 
     // For streaming response
     const websocket = new WebSocket(this, "WebSocket", {
       accessLogBucket,
-      vpc,
-      dbSecrets: vectorStore.secret,
+      vpc: vpc,
       database: database.table,
-      tableAccessRole: database.tableAccessRole,
-      websocketSessionTable: database.websocketSessionTable,
-      auth,
+      dbSecrets: vectorStore.secret,
       bedrockRegion: props.bedrockRegion,
-      largeMessageBucket,
-      documentBucket,
+      tableAccessRole: database.tableAccessRole,
+      documentBucket: documentBucket,
+      websocketSessionTable: database.websocketSessionTable,
+      largeMessageBucket: largeMessageBucket,
+      userPoolId: props.userPoolId,
+      userPoolClientId: props.userPoolClientId,
       enableMistral: props.enableMistral,
     });
+
+
+
     frontend.buildViteApp({
       backendApiEndpoint: backendApi.api.apiEndpoint,
       webSocketApiEndpoint: websocket.apiEndpoint,
       userPoolDomainPrefix: props.userPoolDomainPrefix,
+      cognitoRegion: props.cognitoRegion,
+      userPoolId: props.userPoolId,
+      userPoolClientId: props.userPoolClientId,
       enableMistral: props.enableMistral,
       enableKB: props.enableKB,
-      auth,
       idp,
     });
 

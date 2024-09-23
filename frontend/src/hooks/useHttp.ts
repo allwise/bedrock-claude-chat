@@ -10,7 +10,7 @@ const api = axios.create({
 // // HTTP Request Preprocessing
 api.interceptors.request.use(async (config) => {
   // If Authenticated, append ID Token to Request Header
-  const idToken = (await fetchAuthSession()).tokens?.idToken;
+  const idToken = (await fetchAuthSession()).tokens?.accessToken;
   if (idToken) {
     config.headers['Authorization'] = 'Bearer ' + idToken.toString();
   }

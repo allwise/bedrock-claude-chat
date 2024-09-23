@@ -23,7 +23,8 @@ const usePostMessageStreaming = create<{
       } else {
         dispatch(i18next.t('app.chatWaitingSymbol'));
       }
-      const token = (await fetchAuthSession()).tokens?.idToken?.toString();
+
+      const token = (await fetchAuthSession()).tokens?.accessToken?.toString();
       const payloadString = JSON.stringify({
         ...input,
         token,
