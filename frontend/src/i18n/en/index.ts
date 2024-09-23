@@ -1,10 +1,5 @@
 const translation = {
   translation: {
-    signIn: {
-      button: {
-        login: 'Login',
-      },
-    },
     app: {
       name: 'Bedrock Claude Chat',
       nameWithoutClaude: 'Bedrock Chat',

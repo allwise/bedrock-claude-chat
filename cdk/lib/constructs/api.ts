@@ -2,7 +2,8 @@ import { Construct } from "constructs";
 import { CfnOutput, Duration } from "aws-cdk-lib";
 import { ITable } from "aws-cdk-lib/aws-dynamodb";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
-import { HttpUserPoolAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
+import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
+
 import {
   DockerImageCode,
   DockerImageFunction,
@@ -13,7 +14,6 @@ import {
   HttpApi,
   HttpMethod,
 } from "aws-cdk-lib/aws-apigatewayv2";
-import { Auth } from "./auth";
 import { Platform } from "aws-cdk-lib/aws-ecr-assets";
 import { Stack } from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -30,8 +30,10 @@ export interface ApiProps {
   readonly database: ITable;
   readonly dbSecrets: ISecret;
   readonly corsAllowOrigins?: string[];
-  readonly auth: Auth;
   readonly bedrockRegion: string;
+  readonly cognitoRegion: string;
+  readonly userPoolId: string;
+  readonly userPoolClientId: string;
   readonly tableAccessRole: iam.IRole;
   readonly documentBucket: IBucket;
   readonly largeMessageBucket: IBucket;
@@ -167,7 +169,7 @@ export class Api extends Construct {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["cognito-idp:AdminGetUser"],
-        resources: [props.auth.userPool.userPoolArn],
+        resources:  [props.userPoolClientId], // [props.auth.userPool.userPoolArn],
       })
     );
     props.usageAnalysis?.resultOutputBucket.grantReadWrite(handlerRole);
@@ -192,11 +194,12 @@ export class Api extends Construct {
       environment: {
         TABLE_NAME: database.tableName,
         CORS_ALLOW_ORIGINS: allowOrigins.join(","),
-        USER_POOL_ID: props.auth.userPool.userPoolId,
-        CLIENT_ID: props.auth.client.userPoolClientId,
+        USER_POOL_ID: props.userPoolId,
+        CLIENT_ID: props.userPoolClientId,
         ACCOUNT: Stack.of(this).account,
         REGION: Stack.of(this).region,
         BEDROCK_REGION: props.bedrockRegion,
+        COGNITO_REGION: props.cognitoRegion,
         TABLE_ACCESS_ROLE_ARN: tableAccessRole.roleArn,
         DB_SECRETS_ARN: props.dbSecrets.secretArn,
         DOCUMENT_BUCKET: props.documentBucket.bucketName,
@@ -234,13 +237,16 @@ export class Api extends Construct {
     });
 
     const integration = new HttpLambdaIntegration("Integration", handler);
-    const authorizer = new HttpUserPoolAuthorizer(
-      "Authorizer",
-      props.auth.userPool,
-      {
-        userPoolClients: [props.auth.client],
-      }
-    );
+    // How to create cross account / region jwt authorizer: https://github.com/aws/aws-cdk/discussions/26222
+    const authorizer = new HttpJwtAuthorizer(
+        "Authorizer",
+        "https://cognito-idp." + props.cognitoRegion + ".amazonaws.com/" + props.userPoolId,
+        {
+          jwtAudience:    [props.userPoolClientId], // Look this up in Cognito Userpool App Client settings. It’s the App client ID.
+          identitySource: ["$request.header.Authorization"],
+        }
+    )
+
     let routeProps: any = {
       path: "/{proxy+}",
       integration,

@@ -9,6 +9,8 @@ import { CronScheduleProps } from "../lib/utils/cron-schedule";
 const app = new cdk.App();
 
 const BEDROCK_REGION = app.node.tryGetContext("bedrockRegion");
+const COGNITO_REGION = app.node.tryGetContext("cognitoRegion");
+
 
 // Allowed IP address ranges for this app itself
 const ALLOWED_IP_V4_ADDRESS_RANGES: string[] = app.node.tryGetContext(
@@ -17,6 +19,13 @@ const ALLOWED_IP_V4_ADDRESS_RANGES: string[] = app.node.tryGetContext(
 const ALLOWED_IP_V6_ADDRESS_RANGES: string[] = app.node.tryGetContext(
   "allowedIpV6AddressRanges"
 );
+
+const tags = {
+  "Cdk": "true",
+  "Environment": "poc",
+  "CostCenter": "poc",
+};
+
 
 // Allowed IP address ranges for the published API
 const PUBLISHED_API_ALLOWED_IP_V4_ADDRESS_RANGES: string[] =
@@ -72,6 +81,7 @@ const chat = new BedrockChatStack(app, `BedrockChatStack`, {
   },
   crossRegionReferences: true,
   bedrockRegion: BEDROCK_REGION,
+  cognitoRegion: COGNITO_REGION,
   webAclId: waf.webAclArn.value,
   enableIpV6: waf.ipV6Enabled,
   identityProviders: IDENTITY_PROVIDERS,
@@ -89,5 +99,13 @@ const chat = new BedrockChatStack(app, `BedrockChatStack`, {
   embeddingContainerMemory: EMBEDDING_CONTAINER_MEMORY,
   selfSignUpEnabled: SELF_SIGN_UP_ENABLED,
   natgatewayCount: NATGATEWAY_COUNT,
+  certificateArn: "arn:aws:acm:us-east-1:398885885365:certificate/7a7a56f2-1c11-4207-9f04-d31e1b24534c",
+  hostedZoneId: "Z01505905ENYIOMXJRWL",
+  domain: "poc.aschehoug.cloud",
+  subDomain: "gpt",
+  userPoolId: "eu-west-1_uZcYgg13g",
+  userPoolClientId: "71clt1c3lafts338shk23it2h5",
+  tags,
+
 });
 chat.addDependency(waf);

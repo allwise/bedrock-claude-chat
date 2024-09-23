@@ -1,6 +1,6 @@
 import i18next from 'i18next';
-import detector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
+import no from './no';
 import en from './en';
 import ja from './ja';
 import ko from './ko';
@@ -15,6 +15,10 @@ export const LANGUAGES: {
   value: string;
   label: string;
 }[] = [
+  {
+    value: 'no',
+    label: 'Norsk',
+  },
   {
     value: 'en',
     label: 'English',
@@ -54,6 +58,7 @@ export const LANGUAGES: {
 ];
 
 const resources = {
+  no,
   en,
   de,
   fr,
@@ -68,10 +73,10 @@ const resources = {
 // Settings i18n
 const i18n = i18next
   .use(initReactI18next)
-  .use(detector)
+  //.use(detector)  // disable detector, there is a bug if language is set with dialect eg en-GB
   .init({
     resources,
-    fallbackLng: 'en',
+    fallbackLng: 'no',
     interpolation: {
       escapeValue: false, // react already safes from xss => https://www.i18next.com/translation-function/interpolation#unescape
     },

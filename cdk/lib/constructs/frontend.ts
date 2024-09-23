@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { CfnOutput, RemovalPolicy, Stack } from "aws-cdk-lib";
+import { CfnOutput, RemovalPolicy } from "aws-cdk-lib";
 import {
   BlockPublicAccess,
   Bucket,
@@ -8,12 +8,15 @@ import {
 } from "aws-cdk-lib/aws-s3";
 import {
   CloudFrontWebDistribution,
-  OriginAccessIdentity,
+  OriginAccessIdentity, ViewerCertificate,
 } from "aws-cdk-lib/aws-cloudfront";
 import { NodejsBuild } from "deploy-time-build";
-import { Auth } from "./auth";
 import { Idp } from "../utils/identity-provider";
 import { NagSuppressions } from "cdk-nag";
+import { Certificate } from "aws-cdk-lib/aws-certificatemanager";
+import { ARecord, PublicHostedZone, RecordTarget } from "aws-cdk-lib/aws-route53";
+import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
+
 
 export interface FrontendProps {
   readonly webAclId: string;
@@ -21,6 +24,13 @@ export interface FrontendProps {
   readonly enableKB: boolean;
   readonly accessLogBucket?: IBucket;
   readonly enableIpV6: boolean;
+  readonly certificateArn: string;
+  readonly hostedZoneId: string;
+  readonly domain: string;
+  readonly subDomain: string;
+  readonly userPoolId: string;
+  readonly userPoolClientId: string;
+
 }
 
 export class Frontend extends Construct {
@@ -39,11 +49,21 @@ export class Frontend extends Construct {
       serverAccessLogsPrefix: "AssetBucket",
     });
 
+    const certificate = Certificate.fromCertificateArn(
+        this,
+        "Certificate",
+        props.certificateArn
+    )
+
     const originAccessIdentity = new OriginAccessIdentity(
       this,
       "OriginAccessIdentity"
     );
     const distribution = new CloudFrontWebDistribution(this, "Distribution", {
+      viewerCertificate: ViewerCertificate.fromAcmCertificate(certificate, {
+        aliases: [`${props.subDomain}.${props.domain}`],
+      }),
+
       originConfigs: [
         {
           s3OriginSource: {
@@ -71,7 +91,7 @@ export class Frontend extends Construct {
           responsePagePath: "/",
         },
       ],
-      ...(!this.shouldSkipAccessLogging() && {
+      ...( {
         loggingConfig: {
           bucket: props.accessLogBucket,
           prefix: "Frontend/",
@@ -100,30 +120,32 @@ export class Frontend extends Construct {
     backendApiEndpoint,
     webSocketApiEndpoint,
     userPoolDomainPrefix,
+    cognitoRegion,
+    userPoolId,
+    userPoolClientId,
     enableMistral,
     enableKB,
-    auth,
     idp,
   }: {
     backendApiEndpoint: string;
     webSocketApiEndpoint: string;
     userPoolDomainPrefix: string;
+    cognitoRegion: string;
+    userPoolId: string;
+    userPoolClientId: string;
     enableMistral: boolean;
     enableKB: boolean;
-    auth: Auth;
     idp: Idp;
   }) {
-    const region = Stack.of(auth.userPool).region;
-    const cognitoDomain = `${userPoolDomainPrefix}.auth.${region}.amazoncognito.com/`;
+    const cognitoDomain = `${userPoolDomainPrefix}.auth.${cognitoRegion}.amazoncognito.com/`;
     const buildEnvProps = (() => {
       const defaultProps = {
         VITE_APP_API_ENDPOINT: backendApiEndpoint,
         VITE_APP_WS_ENDPOINT: webSocketApiEndpoint,
-        VITE_APP_USER_POOL_ID: auth.userPool.userPoolId,
-        VITE_APP_USER_POOL_CLIENT_ID: auth.client.userPoolClientId,
+        VITE_APP_USER_POOL_ID: userPoolId,
+        VITE_APP_USER_POOL_CLIENT_ID: userPoolClientId,
         VITE_APP_ENABLE_MISTRAL: enableMistral.toString(),
         VITE_APP_ENABLE_KB: enableKB.toString(),
-        VITE_APP_REGION: region,
         VITE_APP_USE_STREAMING: "true",
       };
 
@@ -176,24 +198,4 @@ export class Frontend extends Construct {
     }
   }
 
-  /**
-   * CloudFront does not support access log delivery in the following regions
-   * @see https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/AccessLogs.html#access-logs-choosing-s3-bucket
-   */
-  private shouldSkipAccessLogging(): boolean {
-    const skipLoggingRegions = [
-      "af-south-1",
-      "ap-east-1",
-      "ap-south-2",
-      "ap-southeast-3",
-      "ap-southeast-4",
-      "ca-west-1",
-      "eu-south-1",
-      "eu-south-2",
-      "eu-central-2",
-      "il-central-1",
-      "me-central-1",
-    ];
-    return skipLoggingRegions.includes(Stack.of(this).region);
-  }
 }

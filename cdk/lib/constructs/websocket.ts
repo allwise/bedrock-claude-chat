@@ -13,7 +13,6 @@ import * as path from "path";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { CfnOutput, Duration, RemovalPolicy, Stack } from "aws-cdk-lib";
 import { Platform } from "aws-cdk-lib/aws-ecr-assets";
-import { Auth } from "./auth";
 import { ITable } from "aws-cdk-lib/aws-dynamodb";
 import { CfnRouteResponse } from "aws-cdk-lib/aws-apigatewayv2";
 import { ISecret } from "aws-cdk-lib/aws-secretsmanager";
@@ -25,7 +24,6 @@ export interface WebSocketProps {
   readonly vpc: ec2.IVpc;
   readonly database: ITable;
   readonly dbSecrets: ISecret;
-  readonly auth: Auth;
   readonly bedrockRegion: string;
   readonly tableAccessRole: iam.IRole;
   readonly documentBucket: s3.IBucket;
@@ -33,6 +31,9 @@ export interface WebSocketProps {
   readonly largeMessageBucket: s3.IBucket;
   readonly accessLogBucket?: s3.Bucket;
   readonly enableMistral: boolean;
+  readonly userPoolId: string;
+  readonly userPoolClientId: string;
+
 }
 
 export class WebSocket extends Construct {
@@ -106,8 +107,8 @@ export class WebSocket extends Construct {
       environment: {
         ACCOUNT: Stack.of(this).account,
         REGION: Stack.of(this).region,
-        USER_POOL_ID: props.auth.userPool.userPoolId,
-        CLIENT_ID: props.auth.client.userPoolClientId,
+        USER_POOL_ID: props.userPoolId,
+        CLIENT_ID: props.userPoolClientId,
         BEDROCK_REGION: props.bedrockRegion,
         TABLE_NAME: database.tableName,
         TABLE_ACCESS_ROLE_ARN: tableAccessRole.roleArn,
