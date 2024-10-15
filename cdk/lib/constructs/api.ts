@@ -165,13 +165,6 @@ export class Api extends Construct {
         ],
       })
     );
-    handlerRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["cognito-idp:AdminGetUser"],
-        resources:  [props.userPoolClientId], // [props.auth.userPool.userPoolArn],
-      })
-    );
     props.usageAnalysis?.resultOutputBucket.grantReadWrite(handlerRole);
     props.usageAnalysis?.ddbBucket.grantRead(handlerRole);
     props.largeMessageBucket.grantReadWrite(handlerRole);

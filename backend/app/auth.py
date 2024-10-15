@@ -3,7 +3,7 @@ import os
 import requests
 from jose import jwt
 
-COGNITO_REGION = os.environ.get("COGNITO_REGION", "ap-northeast-1")
+COGNITO_REGION = os.environ.get("COGNITO_REGION", "eu-west-1")
 
 USER_POOL_ID = os.environ.get("USER_POOL_ID", "")
 CLIENT_ID = os.environ.get("CLIENT_ID", "")

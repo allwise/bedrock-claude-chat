@@ -108,6 +108,18 @@ export class Frontend extends Construct {
       },
     ]);
 
+    // Create a Route 53 hosted zone and record for your custom domain
+    const hostedZone = PublicHostedZone.fromHostedZoneAttributes(this, "HostedZone", {
+      zoneName: props.domain,
+      hostedZoneId: props.hostedZoneId
+    })
+
+    new ARecord(this, 'WebsiteAliasRecord', {
+      zone: hostedZone,
+      recordName: `${props.subDomain}.${props.domain}`,
+      target: RecordTarget.fromAlias(new CloudFrontTarget(distribution)),
+    });
+
     this.assetBucket = assetBucket;
     this.cloudFrontWebDistribution = distribution;
   }
